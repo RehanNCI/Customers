@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customer Enquiry Inbox</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            background: #f8f2ff;
+            transition: background 0.4s, color 0.4s;
+        }
+        body.dark {
+            background: #1f1f28;
+            color: #f2f2f2;
+        }
+        header {
+            background: linear-gradient(135deg, #ff9ad5, #a8eaff);
+            color: #4a0072;
+            padding: 30px 40px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+        }
+        body.dark header {
+            background: linear-gradient(135deg, #42304d, #294257);
+            color: #f8d9ff;
+        }
+        .container {
+            max-width: 950px;
+            margin: 40px auto;
+            background: white;
+            padding: 40px;
+            border-radius: 18px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.12);
+            transition: background 0.3s;
+        }
+        body.dark .container {
+            background: #2a2a36;
+        }
+        h2 {
+            color: #7a4dad;
+        }
+        body.dark h2 {
+            color: #d8b6ff;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 10px;
+            border: 1px solid #dfc7ff;
+            font-size: 16px;
+            background: #fffaff;
+            transition: 0.25s;
+        }
+        body.dark input, body.dark textarea, body.dark select {
+            background: #3a3a47;
+            border-color: #665c82;
+            color: white;
+        }
+        input:focus, textarea:focus {
+            border-color: #b47aff;
+            box-shadow: 0 0 5px #d0a8ff;
+        }
+        button {
+            padding: 12px 22px;
+            background: #ff85c2;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.25s;
+        }
+        button:hover {
+            background: #ff4ca6;
+            box-shadow: 0 4px 10px rgba(255, 76, 166, 0.5);
+        }
+        .toggle-btn {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: #b47aff;
+        }
+        body.dark .toggle-btn {
+            background: #6f52a3;
+        }
+        .card {
+            border-radius: 14px;
+            background: #ffffff;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.07);
+            animation: fadeIn 0.4s ease-in-out;
+            transition: background 0.3s, box-shadow 0.3s, border 0.3s;
+        }
+        body.dark .card {
+            background: #3a3a47;
+        }
+        /* Card highlight colors */
+        .card-new { box-shadow: 0 0 15px #87cefa; border: 2px solid #87cefa; }
+        .card-contacted { box-shadow: 0 0 15px #ffb347; border: 2px solid #ffb347; }
+        .card-closed { box-shadow: 0 0 15px #28a745; border: 2px solid #28a745; }
+
+        /* Status text */
+        .status-new { color: #007bff; font-weight: bold; }
+        .status-contacted { color: #ff8c00; font-weight: bold; }
+        .status-closed { color: #28a745; font-weight: bold; }
+
+        @keyframes fadeIn {
+            from {opacity: 0; transform: translateY(6px);}
+            to {opacity: 1; transform: translateY(0);}
+        }
+        #searchBar {
+            width: 60%;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 10px;
+            border: 1px solid #c3adef;
+            background: #fcf7ff;
+        }
+        #counter {
+            font-size: 14px;
+            margin-top: -10px;
+            margin-bottom: 10px;
+            color: #a362d8;
+        }
+        body.dark #counter {
+            color: #caaeff;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+    </style>
+</head>
+<body>
+
+<button class="toggle-btn" onclick="toggleDarkMode()">🌙</button>
+
+<header>
+    <h1>Customer Enquiry Inbox</h1>
+</header>
+
+<div class="container">
+
+    <h2>Submit an Enquiry</h2>
+    <form id="enquiryForm">
+        <input type="text" id="name" placeholder="Your name" required>
+        <input type="email" id="email" placeholder="Your email" required>
+        <textarea id="message" placeholder="Your message..." rows="4" maxlength="500" required></textarea>
+        <div id="counter">0 / 500</div>
+        <button type="submit">Submit Enquiry</button>
+    </form>
+    <p id="submitStatus" class="success"></p>
+
+    <hr>
+
+    <h2>Admin Dashboard</h2>
+    <input type="text" id="searchBar" placeholder="Search by name or email...">
+    <div id="enquiryList">Loading enquiries...</div>
+
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import {
+        getFirestore,
+        collection,
+        addDoc,
+        serverTimestamp,
+        query,
+        orderBy,
+        onSnapshot,
+        doc,
+        updateDoc
+    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDMvmyZC9sFj3Qm2S-ZMATQWdlPZnwmlmA",
+      authDomain: "customer-enquiry-inbox-f7e22.firebaseapp.com",
+      projectId: "customer-enquiry-inbox-f7e22",
+      storageBucket: "customer-enquiry-inbox-f7e22.firebasestorage.app",
+      messagingSenderId: "332854228704",
+      appId: "1:332854228704:web:89d92a157595c2cdf40285"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const nameInput = document.getElementById("name");
+    const emailInput = document.getElementById("email");
+    const messageInput = document.getElementById("message");
+    const counter = document.getElementById("counter");
+    const statusMsg = document.getElementById("submitStatus");
+    const listDiv = document.getElementById("enquiryList");
+    const searchBar = document.getElementById("searchBar");
+
+    messageInput.addEventListener("input", () => {
+        counter.innerText = `${messageInput.value.length} / 500`;
+    });
+
+    document.getElementById("enquiryForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+            await addDoc(collection(db, "enquiries"), {
+                name: nameInput.value,
+                email: emailInput.value,
+                message: messageInput.value,
+                status: "new",
+                createdAt: serverTimestamp()
+            });
+            statusMsg.innerText = "Your enquiry has been submitted!";
+            statusMsg.style.opacity = 1;
+            setTimeout(() => { statusMsg.style.opacity = 0; }, 3000);
+            e.target.reset();
+            counter.innerText = "0 / 500";
+        } catch (err) {
+            alert("Error submitting enquiry: " + err.message);
+            console.error(err);
+        }
+    });
+
+    const q = query(collection(db, "enquiries"), orderBy("createdAt", "desc"));
+
+    onSnapshot(q, (snapshot) => {
+        render(snapshot);
+    });
+
+    function render(snapshot) {
+        listDiv.innerHTML = "";
+        snapshot.forEach((docSnap) => {
+            const d = docSnap.data();
+            const term = searchBar.value.toLowerCase();
+            if (!(d.name.toLowerCase().includes(term) || d.email.toLowerCase().includes(term))) return;
+
+            const card = document.createElement("div");
+            card.className = "card";
+
+            // Card highlight
+            if (d.status === "new") card.classList.add("card-new");
+            else if (d.status === "contacted") card.classList.add("card-contacted");
+            else if (d.status === "closed") card.classList.add("card-closed");
+
+            // Dropdown text color
+            let statusClass = "";
+            if (d.status === "new") statusClass = "status-new";
+            else if (d.status === "contacted") statusClass = "status-contacted";
+            else if (d.status === "closed") statusClass = "status-closed";
+
+            card.innerHTML = `
+                <strong style="font-size:18px;">${d.name}</strong>
+                <span style="color:#444;">(${d.email})</span><br><br>
+                <div style="color:#333; margin-bottom:10px;">
+                    ${d.message}
+                </div>
+                <label>Status:</label>
+                <select data-id="${docSnap.id}" class="${statusClass}">
+                    <option value="new" ${d.status === "new" ? "selected" : ""}>New</option>
+                    <option value="contacted" ${d.status === "contacted" ? "selected" : ""}>Contacted</option>
+                    <option value="closed" ${d.status === "closed" ? "selected" : ""}>Closed</option>
+                </select>
+            `;
+            listDiv.appendChild(card);
+        });
+
+        document.querySelectorAll("select").forEach((sel) => {
+            sel.addEventListener("change", async (e) => {
+                const id = e.target.getAttribute("data-id");
+                const val = e.target.value;
+                await updateDoc(doc(db, "enquiries", id), { status: val });
+
+                // Update card highlight and dropdown color
+                const cardDiv = e.target.closest(".card");
+                cardDiv.classList.remove("card-new", "card-contacted", "card-closed");
+                e.target.className = "";
+                if (val === "new") { cardDiv.classList.add("card-new"); e.target.classList.add("status-new"); }
+                else if (val === "contacted") { cardDiv.classList.add("card-contacted"); e.target.classList.add("status-contacted"); }
+                else if (val === "closed") { cardDiv.classList.add("card-closed"); e.target.classList.add("status-closed"); }
+            });
+        });
+    }
+
+    searchBar.addEventListener("input", () => {
+        onSnapshot(q, (snapshot) => render(snapshot));
+    });
+</script>
+
+<script>
+    function toggleDarkMode() {
+        document.body.classList.toggle("dark");
+    }
+</script>
+
+</body>
+</html>
